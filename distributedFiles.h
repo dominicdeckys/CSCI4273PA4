@@ -42,6 +42,13 @@
 
 using namespace std;
 
+/*
+ * Constants
+ */
+const static string dfc_msg = "dfc";
+const static string authfail = dfc_msg + " authfail";
+const static string authsuc = dfc_msg + " authsuccess";
+
 enum Severity {
     debug, info, warn, error, dfc, dfs
 };
@@ -134,21 +141,32 @@ public:
     }
     
     void log(Severity sev, string msg) {
-        if (sev >= progSev)
-            cout << sevToString(sev) << ": " << name << ": " << msg << endl;
+        if (sev >= progSev) {
+            cout << sevToString(sev) << ": ";
+            if (sev != dfc && sev != dfs)
+                cout << name << ": ";
+            cout << msg << endl;
+        }
     }
     
     void log(string msg) {
         log(currSev, msg);
     }
+    
+    void printCharVector(vector<char> v) {
+        cout << sevToString(currSev) << ": ";
+        for (int t = 0; t < v.size(); t++)
+            cout << v[t];
+        cout << endl;
+    }
 };
 
-bool fileExists (string name) {
+static bool fileExists (string name) {
     struct stat buf;
     return (stat (name.c_str(), &buf) == 0);
 }
 
-string getMd5(string s) {
+static string getMd5(string s) {
     unsigned char md5[MD5_DIGEST_LENGTH];
     MD5((const unsigned char *)s.c_str(), (unsigned long)s.length(), (unsigned char *)md5);
     char finalString[33]; //I guess the size is 33
@@ -158,7 +176,7 @@ string getMd5(string s) {
     return finalString;
 }
 
-string stringVector(vector<string> v) {
+static string stringVector(vector<string> v) {
     string sol = "Vector: ";
     for (string s: v) {
         sol += s + "_";
@@ -167,9 +185,47 @@ string stringVector(vector<string> v) {
 }
 
 /*
+ * Reads all of the bites of a file
+ * This function is from
+ * https://codereview.stackexchange.com/questions/22901/reading-all-bytes-from-a-file
+ */
+static vector<char> ReadAllBytes(char const* filename)
+{
+    ifstream ifs(filename, ios::binary|ios::ate);
+    ifstream::pos_type pos = ifs.tellg();
+
+    vector<char>  result(pos);
+
+    ifs.seekg(0, ios::beg);
+    ifs.read(&result[0], pos);
+
+    return result;
+}
+
+/**
+ * Writes all bytes to the file, overwrites any file that is there
+ * @param file
+ * @return 
+ */
+static void WriteAllBytes(char const* filename, vector<char> bytes) {
+    ofstream ofs(filename, ios::binary|ios::trunc);
+    
+    ofs.write(bytes.data(), bytes.size());
+    ofs.close();
+}
+
+/*
+ * Splits a file into four nearly equal parts
+ * returns a map where the int is the size of each part
+ */
+static map<int, vector<char>> splitFileInto4(vector<char> file) {
+    //todo
+}
+
+/*
  * Splits a string by delimeter
  */
-vector<string> split(string s, char delim) {
+static vector<string> split(string s, char delim) {
     vector<string> sol;
     int start = 0;
     for (int t = 0; t < s.length(); t++) {

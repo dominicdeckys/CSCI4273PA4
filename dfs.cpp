@@ -35,12 +35,14 @@ bool readConfiguration () {
         vector<string> str = split(line, ' ');
         if (str.size() != 2) {
             l.log(warn, "User not configured correctly");
+            return false;
         }
         users.insert(str[0], str[1]);
     }
     
     if (users.size() <= 0)
         l.log(warn, "There are no users");
+    return true;
 }
 
 void ctrlC (int sig) {
@@ -60,6 +62,35 @@ void exitGracefully(int connfd) {
 void * listenToClient (void * arg) {
     logger l("listenToClient()");
     int connfd = (int)*((int*)arg);
+    l.log(debug, "New client with connfd = " + to_string(connfd));
+    
+    int n;
+    char buf[BUFSIZE];
+    n = recv(connfd, buf, BUFSIZE, 0);
+    if (n <= 0 || n >= BUFSIZE) {
+        l.log(warn, "Problem getting command from client, closing socket connfd = " + to_string(connfd));
+        exitGracefully(connfd);
+    }
+    buf[n] = '\0'; //add end of string char in case it is not there
+    //the absense of the eos char causes many headaches
+    string command(buf);
+    vector<string> com_list = split(command, ' ');
+    
+    if (com_list[0] != "dfc") 
+    {
+        l.log(warn, "client command formatted incorrectly, closing socket connfd = " + to_string(connfd));
+        exitGracefully(connfd);
+    }
+    string user = com_list[1];
+    if (!users.contains(user) || com_list[2] != users.get(user)) {
+        l.log(warn, "client authentication failed, closing socket connfd = " + to_string(connfd));
+        send(connfd, (const char *)authfail.c_str(), authfail.length(), 0);
+        exitGracefully(connfd);
+    }
+    l.log(debug, "User authenticated " + user + " " + users.get(user));
+    send(connfd, (const char *)authsuc.c_str(), authsuc.length(), 0);
+    
+    exitGracefully(connfd);
 }
 
 /*
@@ -100,13 +131,13 @@ int main(int argc, char** argv) {
     //preparation of the socket address
     servaddr.sin_family = AF_INET;
     servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
-    servaddr.sin_port = htons((unsigned short)atoi(argv[1]));
+    servaddr.sin_port = htons((unsigned short)atoi(argv[2]));
     
     bind(listenfd, (struct sockaddr *) &servaddr, sizeof(servaddr));
 
     listen(listenfd, LISTENQ);
 
-    l.log("Server running...waiting for connections.");
+    
     openSockets = 0;
     pthread_t thread;
     
@@ -122,6 +153,7 @@ int main(int argc, char** argv) {
         return 0;    
     }
     signal (SIGPIPE, SIG_IGN);
+    l.log("Server running on port " + to_string(atoi(argv[2])) + "...waiting for connections.");
     while(true) {
 
         clilen = sizeof(cliaddr);

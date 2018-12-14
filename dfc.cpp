@@ -25,6 +25,7 @@ using namespace std;
 
 struct sockaddr_in buildAddressObject(string hostname, string port) {
     logger l("buildAddressObject()");
+    l.log(debug, "building " + hostname + ":" + port);
     /* gethostbyname: get the server's DNS entry */
     struct sockaddr_in serveraddr;
     struct hostent *server;
@@ -39,7 +40,7 @@ struct sockaddr_in buildAddressObject(string hostname, string port) {
     serveraddr.sin_family = AF_INET;
     bcopy((char *)server->h_addr,
 	  (char *)&serveraddr.sin_addr.s_addr, server->h_length);
-    serveraddr.sin_port = stoi(port);
+    serveraddr.sin_port = htons(stoi(port));
     return serveraddr;
 }
 
@@ -108,6 +109,42 @@ bool readConfiguration () {
     return true;
 }
 
+string doList() {
+    
+    for (int t = 0; t < 4; t++) {
+        
+    }
+}
+
+bool authenticate(int connfd) {
+    logger l("authenticate()");
+    int n;
+    char buf[BUFSIZE];
+    string msg = "dfc " + user + " " + pass;
+    if ((n = send(connfd, msg.c_str(), msg.length(), 0)) <= 0) {
+        l.log(info, "failed sending authentication message to server");
+        return false;
+    }
+    if ((n = recv(connfd, buf, BUFSIZE, 0)) <= 0 || n >= BUFSIZE) {
+        l.log(info, "never received confirmation from the server");
+        return false;
+    }
+    buf[n] = '\0';
+    string confirm(buf);
+    if (confirm == authfail) {
+        l.log(info, "server returned authentication fail");
+        return false;
+    }
+    else if (confirm == authsuc) {
+        l.log(info, "server returned authentication success");
+        return true;
+    }
+    else {
+        l.log(info, "server returned invalid response");
+        return false;
+    }
+    
+}
 
 /*
  * 
@@ -130,18 +167,51 @@ int main(int argc, char** argv) {
             l.log(error, "error opening socket " + to_string(t));
         
         if (connect(sockets[t], (struct sockaddr *)&serveraddrList[t], sizeof(serveraddrList[t])) < 0) {
-            l.log(dfc, "DFS" + to_string(t + 1) + " is down, ignoring until program restart");
+            l.log(dfc, "DFS" + to_string(t + 1) + " appears to be down, ignoring until program restart");
             downservers++;
             serverStatus[t] = false;
         }
-        else
+        else if (authenticate(sockets[t])){
+            l.log(dfc, "Authenticated and connected to DFS" + to_string(t + 1));
             serverStatus[t] = true;
+        }
+        else {
+            l.log(dfc, "Authenticated failed for DFS" + to_string(t + 1));
+            downservers++;
+            serverStatus[t] = false;
+            close(sockets[t]);
+        }
     }
-    if (downservers >= 4) {
-        l.log(error, "All servers down, client cannot proceed");
+    //change to 4
+    if (downservers >= 5) {
+        l.log(error, "All servers ether down or failed to authenticate, client cannot proceed");
         return 0;
     }
     
+    string line;
+    
+    while (true) {
+        l.log(dfc, "Enter a command:");
+        l.log(dfc, "list");
+        l.log(dfc, "put <file name>");
+        l.log(dfc, "get <file name>");
+        
+        cin >> line;
+        
+        vector<string> input = split(line, ' ');
+        if (input[0] == "list") {
+            
+        }
+        else if (input[0] == "put") {
+            //todo
+        }
+        else if (input[0] == "get") {
+            //todo
+        }
+        else {
+            l.log(error, "Input not recognized! Try again and use lowercase for the command");
+        }
+    }
     
     return 0;
 }
