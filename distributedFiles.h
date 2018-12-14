@@ -23,7 +23,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <string.h>
+#include <string>
 #include <unistd.h>
 #include  <signal.h>
 #include <netdb.h>
@@ -36,8 +36,61 @@
 #include <cstdio>
 #include <ctime>
 #include <list>
+#include <vector>
 
 using namespace std;
+
+enum Severity {
+    debug, info, warn, error, dfc, dfs
+};
+
+class logger {
+    
+private:
+    string name;
+    Severity currSev;
+    
+    string sevToString (Severity sev) {
+        switch (sev) {
+            case debug:
+                return "DEBUG";
+            case info:
+                return "INFO";
+            case warn:
+                return "WARN";
+            case error:
+                return "ERROR";
+            case dfc:
+                return "DFC";
+            case dfs:
+                return "DFS";
+            default:
+                return "BAD BAD";
+        }
+    }
+    
+public:
+    
+    const static Severity progSev = debug;
+    
+    logger(string namee) {
+        name = namee;
+        currSev = info;
+    }
+    
+    void setSeverity(Severity sev) {
+        currSev = sev;
+    }
+    
+    void log(Severity sev, string msg) {
+        if (sev >= progSev)
+            cout << sevToString(sev) << ": " << name << ": " << msg << endl;
+    }
+    
+    void log(string msg) {
+        log(currSev, msg);
+    }
+};
 
 bool fileExists (string name) {
     struct stat buf;
@@ -53,6 +106,36 @@ string getMd5(string s) {
         sprintf(&finalString[i*2], "%02x", (unsigned int)md5[i]);
     return finalString;
 }
+
+string stringVector(vector<string> v) {
+    string sol = "Vector: ";
+    for (string s: v) {
+        sol += s + "_";
+    }
+    return sol;
+}
+
+/*
+ * Splits a string by delimeter
+ */
+vector<string> split(string s, char delim) {
+    vector<string> sol;
+    int start = 0;
+    for (int t = 0; t < s.length(); t++) {
+        if(s[t] == delim) {
+            if (t <= start)
+                start++;
+            else {
+                sol.push_back(s.substr(start, t - start));
+                start = t + 1;
+            }
+        }
+    }
+    if (start < s.length())
+        sol.push_back(s.substr(start, s.length()));
+    return sol;
+}
+
 
 
 #endif /* DISTRIBUTEDFILES_H */
