@@ -13,6 +13,8 @@
 
 #ifndef DISTRIBUTEDFILES_H
 #define DISTRIBUTEDFILES_H
+#define LISTENQ 50 /*maximum number of client connections */
+#define BUFSIZE 4096
 
 #include <sys/stat.h>
 #include <string.h>
@@ -42,6 +44,55 @@ using namespace std;
 
 enum Severity {
     debug, info, warn, error, dfc, dfs
+};
+
+template <class K, class V>
+class dMap {
+private:
+    map<K, V> m;
+    
+public:
+    
+    int size() {
+        return m.size();
+    }
+    
+    /*
+     * Inserts and updates if value already exists
+     */
+    void insert(K key, V value) {
+        typename map<K, V>::iterator it = m.find(key);
+        if (it != m.end()) {
+            it->second = value;
+        }
+        else
+            m.insert({key, value});
+    }
+    
+    void add(K key, V value) {
+        insert(key, value);
+    }
+    
+    /*
+     * Gets the value for the key, returns NULL if it does not exist
+     */
+    V get(K key) {
+        typename map<K, V>::iterator it = m.find(key);
+        if (it != m.end()) {
+            return it->second;
+        }
+        else
+            return NULL;
+    }
+    
+    bool contains(const K k) {
+        typename map<K, V>::iterator it = m.find(k);
+        if (it != m.end()) {
+            return true;
+        }
+        else
+            return false;
+    }
 };
 
 class logger {
