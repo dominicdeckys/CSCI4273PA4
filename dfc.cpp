@@ -21,13 +21,6 @@ int sockets[4];
 bool serverStatus[4];
 string user, pass;
 
-struct quadShort {
-    short s1 = -1;
-    short s2 = -1;
-    short s3 = -1;
-    short s4 = -1;
-};
-
 struct fileParts {
     bool b1 = false;
     bool b2 = false;
@@ -245,16 +238,133 @@ void doList() {
 }
 
 void doPutSingular(int connfd, string filename, short part, char * buf, int start, int end) {
-    logger l("doPutSingular");
+    logger l("doPutSingular()");
     int n;
+    char buf2[BUFSIZE];
     l.log(debug, "sending name " + filename + " connfd " + to_string(connfd) + " start " + to_string(start) + " end " + to_string(end));
-    string msg = "dfc put " + filename + " " + to_string(part);
+    string msg = "dfc put " + filename + " " + to_string(part) + " " + to_string(end-start);
     
     send(connfd, msg.c_str(), msg.length(), 0);
+    //todo send broken
+    if ((n = recv(connfd, buf2, BUFSIZE, 0)) <= 0) {
+        //todo server broken
+    }
+    
+    sendPartialFile(connfd, filename, buf, start, end);
 }
 
-void doPut(string filename) {
-    //todo
+vector<char> doGetSingular(short server, string filename, short part) {
+    int connfd = sockets[server];
+    logger l("doGetSingular()");
+    brokenFile f;
+    string good = "dfs good";
+    send (connfd, good.c_str(), good.length(), 0);
+    
+    vector<char> bytes = receiveFile(connfd, size);
+    l.log(info, "Finished receiving file");
+    
+    f.name = filename;
+    f.part = part;
+    
+    return bytes;
+}
+
+/**
+ * 
+ * @param order
+ * @param filename
+ * @param buf
+ * @param a
+ * @param b
+ * @param c
+ * @param d
+ * @param e
+ */
+void doPutListInOrder(int order[], string filename, char * buf, int a, int b, int c, int d, int e) {
+    /*
+     * (1, 2) (2, 3) (3, 4) (4, 1)
+     */
+    logger l("doPutListInOrder()");
+    if (serverStatus[order[0]]) {
+        doPutSingular(sockets[order[0]], filename, 1, buf, a, b); //1
+        doPutSingular(sockets[order[0]], filename, 2, buf, b, c); //2
+    }
+    else {
+        l.log(dfc, "Not sending to DFS" + to_string(order[0] + 1) + " because it is not connected");
+    }
+    
+    if (serverStatus[order[1]]) {
+        doPutSingular(sockets[order[1]], filename, 2, buf, b, c); //2
+        doPutSingular(sockets[order[1]], filename, 3, buf, c, d); //3
+    }
+    else {
+        l.log(dfc, "Not sending to DFS" + to_string(order[1] + 1) + " because it is not connected");
+    }
+    
+    if (serverStatus[order[2]]) {
+        doPutSingular(sockets[order[2]], filename, 3, buf, c, d); //3
+        doPutSingular(sockets[order[2]], filename, 4, buf, d, e); //4
+    }
+    else {
+        l.log(dfc, "Not sending to DFS" + to_string(order[2] + 1) + " because it is not connected");
+    }
+    
+    if (serverStatus[order[3]]) {
+        doPutSingular(sockets[order[3]], filename, 4, buf, d, e); //4
+        doPutSingular(sockets[order[3]], filename, 1, buf, a, b); //1
+    }
+    else {
+        l.log(dfc, "Not sending to DFS" + to_string(order[3] + 1) + " because it is not connected");
+    }
+}
+
+bool doGet(string filename) {
+    logger l("doGet()");
+    //determine if it is possible to complete file
+    vector<brokenFile> brokenFiles = getAllBrokenFiles();
+    //these ints will store which server were requesting the part from
+    int p[] = {-1, -1, -1, -1};
+    for (brokenFile f: brokenFiles) {
+        if (f.name == filename) {
+            p[f.part] = f.server;
+        }
+    }
+    
+    for (int t = 0; t < 4; t++) {
+        if (p[t] < 0 || p[t] > 3) {
+            l.log(error, "Cannot reconstruct file because it is incomplete");
+            return false;
+        }
+    }
+    
+    vector<char> completeFile;
+    
+    for (int t = 0; t < 4; t++) {
+        vector<char> part = doGetSingular(p[t], filename, t + 1);
+        completeFile.insert(completeFile.end(), part.begin(), part.end());
+    }
+    
+    WriteAllBytes(filename.c_str(), completeFile);
+    l.log(info, "Finished reconstructing " + filename);
+    return true;
+}
+
+bool doPut(string filename) {
+    logger l("doPut()");
+    if (!fileExists(filename)) {
+        l.log(error, "File " + filename + " does not exist");
+        return false;
+    }
+    l.log(info, "putting " + filename);
+    vector<char> filevec = ReadAllBytes(filename.c_str());
+    int size = filevec.size();
+    int a, b, c, d, e; //how the file will be broken up
+    a = 0; e = size;
+    c = size / 2;
+    b = c / 2;
+    d = c + b;
+    int o[] = {0, 1, 2, 3};
+    doPutListInOrder(o, filename, filevec.data(), a, b, c, d, e);
 }
 
 bool authenticate(int connfd) {
@@ -336,14 +446,17 @@ int main(int argc, char** argv) {
         l.log(dfc, "put <file name>");
         l.log(dfc, "get <file name>");
         
-        cin >> line;
+        getline(cin, line);
         
         vector<string> input = split(line, ' ');
         if (input[0] == "list") {
             doList();
         }
         else if (input[0] == "put") {
-            //todo
+            //todo check for input
+            if (!doPut(input[1])) {
+                //todo fail
+            }
         }
         else if (input[0] == "get") {
             //todo

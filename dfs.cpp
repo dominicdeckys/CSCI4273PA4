@@ -79,7 +79,7 @@ void printDir(string dirn) {
   perror ("");
 }
 
-string getActualFileName(string name, short int part) {
+string getActualFileName(string name, short part) {
     return "." + name + "." + to_string(part);
 }
 
@@ -151,8 +151,21 @@ bool doList(int connfd, vector<brokenFile> list) {
     return true;
 }
 
-void doPut(int connfd, vector<brokenFile> list, string filename, short part) {
+bool doPut(int connfd, string user_dir, string filename, short part, int size) {
+    logger l("doPut()");
+    brokenFile f;
+    string good = "dfs good";
+    send (connfd, good.c_str(), good.length(), 0);
     
+    vector<char> bytes = receiveFile(connfd, size);
+    l.log(info, "Finished receiving file");
+    
+    f.name = filename;
+    f.part = part;
+    
+    WriteAllBytes((user_dir + "/" + getActualFileName(filename, part)).c_str(), bytes);
+    l.log(info, "Finished writing " + filename + " " + to_string(part) + "to the filesystem");
+    return true;
 }
 
 void * listenToClient (void * arg) {
@@ -222,7 +235,9 @@ void * listenToClient (void * arg) {
         }
         else if (commList[1] == "put") {
             //todo - check there are enough args
-            doPut(connfd, userFiles, commList[2], commList[3]);
+            if(doPut(connfd, user_dir, commList[2], stoi(commList[3]), stoi(commList[4]))) {
+                userFiles.push_back({commList[2], (short)stoi(commList[3]), -1});
+            }
         }
         else {
             l.log(warn, "client command formatted incorrectly 2, closing socket connfd = " + to_string(connfd));

@@ -203,6 +203,11 @@ static bool mkDirWrap (string dir) {
     }
 }
 
+static string getMd5(const unsigned char * str, unsigned long len) {
+    
+    
+}
+
 static string getMd5(string s) {
     unsigned char md5[MD5_DIGEST_LENGTH];
     MD5((const unsigned char *)s.c_str(), (unsigned long)s.length(), (unsigned char *)md5);
@@ -259,10 +264,26 @@ static void WriteAllBytes(char const* filename, vector<char> bytes) {
  * @param start
  * @param end
  */
-void sendPartialFile(int connfd, string name, char * buf, int start, int end) {
+static void sendPartialFile(int connfd, string name, char * buf, int start, int end) {
     logger l("sendPartialFile()");
     l.log(debug, "sending name " + name + " connfd " + to_string(connfd) + " start " + to_string(start) + " end " + to_string(end));
     send(connfd, buf + start, end - start, 0);
+}
+
+static vector<char> receiveFile(int connfd, int size){
+    logger l("receiveFile()");
+    int n;
+    char c;
+    vector<char> bytes;
+    while (bytes.size() < size) {
+        n = recv(connfd, &c, sizeof(char), 0);
+        if(n <= 0) {
+            l.log(error, "Client didn't send enough bytes");
+            return bytes;
+        }
+        bytes.push_back(c);
+    }
+    return bytes;
 }
 /*
  * Splits a file into four nearly equal parts
