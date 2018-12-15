@@ -128,7 +128,7 @@ vector<brokenFile> doListSingular(short server) {
     char buf[BUFSIZE];
     vector<brokenFile> files;
     if (!serverStatus[server]) {
-        l.log(debug, "server offline " + to_string(server));
+        l.log(debug, "server offline " + to_string(server  + 1));
         return files;
     }
 
@@ -148,7 +148,7 @@ vector<brokenFile> doListSingular(short server) {
         vector<string> args = split(full, ' ');
         l.log(debug, stringVector(args));
 
-        if (args.size() < 4) {
+        if (args.size() < 2) {
             l.log(warn, "unknown input received");
             break;
         }
@@ -256,6 +256,31 @@ void doPutSingular(int connfd, string filename, short part, char * buf, int star
 vector<char> doGetSingular(short server, string filename, short part) {
     int connfd = sockets[server];
     logger l("doGetSingular()");
+    
+    string msg = "dfc get " + filename + " " + to_string(part);
+    l.log(debug, msg);
+    int n = send (sockets[server], msg.c_str(), msg.length(), 0);
+    
+    if (n <= 0) {
+        //todo
+    }
+    
+    char buf[BUFSIZE];
+    
+    n = recv (sockets[server], buf, BUFSIZE, 0);
+    
+    string rec(buf);
+    vector<string> args = split(rec, ' ');
+    
+    l.log(debug, stringVector(args));
+    
+    if (args.size() < 3 || args[1] != "get" ) {
+        //todo
+        l.log(warn, "get failed, received bad response from server");
+    }
+    
+    int size = stoi(args[2]);
+    
     brokenFile f;
     string good = "dfs good";
     send (connfd, good.c_str(), good.length(), 0);
@@ -326,7 +351,7 @@ bool doGet(string filename) {
     int p[] = {-1, -1, -1, -1};
     for (brokenFile f: brokenFiles) {
         if (f.name == filename) {
-            p[f.part] = f.server;
+            p[f.part - 1] = f.server;
         }
     }
     
@@ -460,6 +485,9 @@ int main(int argc, char** argv) {
         }
         else if (input[0] == "get") {
             //todo
+            if(!doGet(input[1])) {
+                //todo
+            }
         }
         else {
             l.log(error, "Input not recognized! Try again and use lowercase for the command");

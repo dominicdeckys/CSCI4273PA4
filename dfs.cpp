@@ -151,6 +151,50 @@ bool doList(int connfd, vector<brokenFile> list) {
     return true;
 }
 
+bool doGet(int connfd, vector<brokenFile> list, string filename, short part, string user_path) {
+    logger l("doGet()");
+    
+    bool cont = false;
+    for (brokenFile f: list) {
+        if (f.name == filename && f.part == part) {
+            cont = true;
+            break;
+        }
+    }
+    if (!cont) {
+        l.log(error, "File " + filename + " not found on server");
+        string err = "dfs error filenotfound";
+        send (connfd, err.c_str(), err.length(), 0);
+        return false;
+        
+    }
+    
+    string actualpath = (user_path + "/" + getActualFileName(filename, part));
+    l.log(debug, "Reading the bytes of " + actualpath);
+    vector<char> data = ReadAllBytes(actualpath.c_str());
+    
+    string msg = "dfs get " + to_string(data.size());
+    
+    l.log(debug, msg);
+    int n = send (connfd, msg.c_str(), msg.length(), 0);
+    
+    if (n <= 0) {
+        //todo
+    }
+    char buf[BUFSIZE];
+    n = recv(connfd, buf, BUFSIZE, 0);
+    
+    if (n <= 0) {
+        //todo
+    }
+    
+    l.log(debug, "sending file");
+    send(connfd, data.data(), data.size(), 0);
+    
+    l.log(info, "Finished sending file " + filename);
+    return true;
+}
+
 bool doPut(int connfd, string user_dir, string filename, short part, int size) {
     logger l("doPut()");
     brokenFile f;
@@ -231,7 +275,10 @@ void * listenToClient (void * arg) {
             doList(connfd, userFiles);
         }
         else if (commList[1] == "get") {
-            
+            //todo check args
+            if(!doGet(connfd, userFiles, commList[2], (short)stoi(commList[3]), user_dir)) {
+                //todo
+            }
         }
         else if (commList[1] == "put") {
             //todo - check there are enough args
