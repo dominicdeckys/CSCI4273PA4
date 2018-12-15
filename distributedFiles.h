@@ -55,6 +55,7 @@ const static string authsuc = dfc_msg + " authsuccess";
 enum Severity {
     debug, info, warn, error, dfc, dfs
 };
+static Severity progSev;
 struct brokenFile {
     string name;
     short part = -1;
@@ -151,8 +152,6 @@ private:
     }
     
 public:
-    
-    const static Severity progSev = debug;
     
     logger(string namee) {
         name = namee;

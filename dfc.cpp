@@ -52,12 +52,12 @@ struct sockaddr_in buildAddressObject(string hostname, string port) {
     return serveraddr;
 }
 
-bool readConfiguration () {
+bool readConfiguration (string filename) {
     logger l("readConfiguration()");
-    if (!fileExists("dfc.conf"))
+    if (!fileExists(filename))
         return false;
     
-    ifstream file("dfc.conf");
+    ifstream file(filename);
     string line;
     
     for (int t = 0; t < 4; t++) {
@@ -237,17 +237,25 @@ void doList() {
     
 }
 
-void doPutSingular(int connfd, string filename, short part, char * buf, int start, int end) {
+void doPutSingular(int server, int connfd, string filename, short part, char * buf, int start, int end) {
     logger l("doPutSingular()");
     int n;
     char buf2[BUFSIZE];
     l.log(debug, "sending name " + filename + " connfd " + to_string(connfd) + " start " + to_string(start) + " end " + to_string(end));
     string msg = "dfc put " + filename + " " + to_string(part) + " " + to_string(end-start);
     
-    send(connfd, msg.c_str(), msg.length(), 0);
+    if (send(connfd, msg.c_str(), msg.length(), 0) <= 0) {
+        l.log(error, "Unable to communicate with DFS" + to_string(server));
+        l.log(error, "DFS" + to_string(server) + " is now offline");
+        serverStatus[server] = false;
+        return;
+    }
     //todo send broken
     if ((n = recv(connfd, buf2, BUFSIZE, 0)) <= 0) {
-        //todo server broken
+        l.log(error, "Unable to communicate with DFS" + to_string(server));
+        l.log(error, "DFS" + to_string(server) + " is now offline");
+        serverStatus[server] = false;
+        return;
     }
     
     sendPartialFile(connfd, filename, buf, start, end);
@@ -256,13 +264,15 @@ void doPutSingular(int connfd, string filename, short part, char * buf, int star
 vector<char> doGetSingular(short server, string filename, short part) {
     int connfd = sockets[server];
     logger l("doGetSingular()");
+    vector<char> nully;
     
     string msg = "dfc get " + filename + " " + to_string(part);
     l.log(debug, msg);
     int n = send (sockets[server], msg.c_str(), msg.length(), 0);
     
     if (n <= 0) {
-        //todo
+        l.log(error, "unable to communicate with server, file might be corrupt");
+        return nully;
     }
     
     char buf[BUFSIZE];
@@ -276,7 +286,8 @@ vector<char> doGetSingular(short server, string filename, short part) {
     
     if (args.size() < 3 || args[1] != "get" ) {
         //todo
-        l.log(warn, "get failed, received bad response from server");
+        l.log(warn, "get failed, received bad response from server, file may be corrupt");
+        return nully;
     }
     
     int size = stoi(args[2]);
@@ -311,32 +322,32 @@ void doPutListInOrder(int order[], string filename, char * buf, int a, int b, in
      */
     logger l("doPutListInOrder()");
     if (serverStatus[order[0]]) {
-        doPutSingular(sockets[order[0]], filename, 1, buf, a, b); //1
-        doPutSingular(sockets[order[0]], filename, 2, buf, b, c); //2
+        doPutSingular(order[0], sockets[order[0]], filename, 1, buf, a, b); //1
+        doPutSingular(order[0], sockets[order[0]], filename, 2, buf, b, c); //2
     }
     else {
         l.log(dfc, "Not sending to DFS" + to_string(order[0] + 1) + " because it is not connected");
     }
     
     if (serverStatus[order[1]]) {
-        doPutSingular(sockets[order[1]], filename, 2, buf, b, c); //2
-        doPutSingular(sockets[order[1]], filename, 3, buf, c, d); //3
+        doPutSingular(order[1], sockets[order[1]], filename, 2, buf, b, c); //2
+        doPutSingular(order[1], sockets[order[1]], filename, 3, buf, c, d); //3
     }
     else {
         l.log(dfc, "Not sending to DFS" + to_string(order[1] + 1) + " because it is not connected");
     }
     
     if (serverStatus[order[2]]) {
-        doPutSingular(sockets[order[2]], filename, 3, buf, c, d); //3
-        doPutSingular(sockets[order[2]], filename, 4, buf, d, e); //4
+        doPutSingular(order[2], sockets[order[2]], filename, 3, buf, c, d); //3
+        doPutSingular(order[2], sockets[order[2]], filename, 4, buf, d, e); //4
     }
     else {
         l.log(dfc, "Not sending to DFS" + to_string(order[2] + 1) + " because it is not connected");
     }
     
     if (serverStatus[order[3]]) {
-        doPutSingular(sockets[order[3]], filename, 4, buf, d, e); //4
-        doPutSingular(sockets[order[3]], filename, 1, buf, a, b); //1
+        doPutSingular(order[3], sockets[order[3]], filename, 4, buf, d, e); //4
+        doPutSingular(order[3], sockets[order[3]], filename, 1, buf, a, b); //1
     }
     else {
         l.log(dfc, "Not sending to DFS" + to_string(order[3] + 1) + " because it is not connected");
@@ -357,7 +368,8 @@ bool doGet(string filename) {
     
     for (int t = 0; t < 4; t++) {
         if (p[t] < 0 || p[t] > 3) {
-            l.log(error, "Cannot reconstruct file because it is incomplete");
+            l.log(error, "Cannot reconstruct file because it is incomplete or does not exist");
+            l.log(error, "Run list to get a list of complete files");
             return false;
         }
     }
@@ -371,6 +383,7 @@ bool doGet(string filename) {
     
     WriteAllBytes(filename.c_str(), completeFile);
     l.log(info, "Finished reconstructing " + filename);
+    l.log(dfc, "Received and reconstructed file " + filename);
     return true;
 }
 
@@ -427,8 +440,19 @@ bool authenticate(int connfd) {
  */
 int main(int argc, char** argv) {
     logger l("main()");
-    if (!readConfiguration()) {
-        l.log(error, "There was a problem reading your configuration file dfc.conf, "
+    progSev = error;
+    
+    if (argc < 2) {
+        l.log(error, "please specify a configuration file");
+        l.log(error, "Usage: ./dfc <conf file> <debug(optional)>");
+        
+        return 0;
+    }
+    if (argc >= 3 && string(argv[2]) == "debug") {
+        progSev = debug;
+    }
+    if (!readConfiguration(argv[1])) {
+        l.log(error, "There was a problem reading your configuration file "+ string(argv[1]) +", "
         "are you sure it exists and is set up properly? If you're unsure refer to the readme"
         " or run the program with warnings enabled");
         return 0;

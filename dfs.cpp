@@ -154,6 +154,7 @@ bool doList(int connfd, vector<brokenFile> list) {
 bool doGet(int connfd, vector<brokenFile> list, string filename, short part, string user_path) {
     logger l("doGet()");
     
+    l.log(info, "received get request for " + filename + " part " = to_string(part));    
     bool cont = false;
     for (brokenFile f: list) {
         if (f.name == filename && f.part == part) {
@@ -179,13 +180,15 @@ bool doGet(int connfd, vector<brokenFile> list, string filename, short part, str
     int n = send (connfd, msg.c_str(), msg.length(), 0);
     
     if (n <= 0) {
-        //todo
+        l.log(warn, "Unable to send message to client, closing socket " + to_string(connfd));
+        exitGracefully(connfd);
     }
     char buf[BUFSIZE];
     n = recv(connfd, buf, BUFSIZE, 0);
     
     if (n <= 0) {
-        //todo
+        l.log(warn, "Never received response from client, closing socket " + to_string(connfd));
+        exitGracefully(connfd);
     }
     
     l.log(debug, "sending file");
@@ -301,6 +304,7 @@ void * listenToClient (void * arg) {
 int main(int argc, char** argv) {
     
     logger l("main()");
+    progSev = debug;
     //check arguments
     if (argc < 3) {
         l.log(dfs, "Usage: ./dfs <server #> <port>");
