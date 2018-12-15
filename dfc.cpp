@@ -21,11 +21,18 @@ int sockets[4];
 bool serverStatus[4];
 string user, pass;
 
-struct quadBool {
-    bool b1;
-    bool b2;
-    bool b3;
-    bool b4;
+struct quadShort {
+    short s1 = -1;
+    short s2 = -1;
+    short s3 = -1;
+    short s4 = -1;
+};
+
+struct fileParts {
+    bool b1 = false;
+    bool b2 = false;
+    bool b3 = false;
+    bool b4 = false;
 };
 
 using namespace std;
@@ -117,29 +124,112 @@ bool readConfiguration () {
     return true;
 }
 
-dMap<string, quadBool> doList() {
+
+vector<brokenFile> doListSingular(short server) {
+    logger l("doListSingular()");
+    int n;
+    char buf[BUFSIZE];
+    vector<brokenFile> files;
+    if (!serverStatus[server]) {
+        l.log(debug, "server offline " + to_string(server));
+        return files;
+    }
+
+    string msg = "dfc list";
+    send(sockets[server], msg.c_str(), msg.length(), 0);
+
+    while (true) {
+        bzero(buf, BUFSIZE);
+        if ((n = recv(sockets[server], buf, BUFSIZE, 0)) <= 0) {
+            l.log(error, "Connection with server lost: DFS" + to_string(server + 1));
+            //TODO remove function
+            return files;
+        }
+        buf[n] = '\0';
+        string full(buf);
+        vector<string> args = split(full, ' ');
+        l.log(debug, stringVector(args));
+
+        if (args.size() < 4) {
+            l.log(warn, "unknown input received");
+            break;
+        }
+        if (args[1] == "listitem") {
+            l.log(debug, "adding item to list");
+            brokenFile f = {args[2], (short) stoi(args[3]), server};
+            files.push_back(f);
+            string msg2 = "dfc good";
+            send(sockets[server], msg2.c_str(), msg2.length(), 0);
+        }
+        else if (args[1] == "listdone") {
+            l.log(info, "end of list reached for DFS" + to_string(server + 1));
+            break;
+        }
+        else {
+            l.log(warn, "unknown input received");
+            break;
+        }
+
+    }
+    return files;
+}
+
+vector<brokenFile> getAllBrokenFiles() {
+    vector<brokenFile> brokenFiles;
+    for (int t = 0; t < 4; t++) {
+        vector<brokenFile> vecc = doListSingular(t);
+        brokenFiles.insert(brokenFiles.end(), vecc.begin(), vecc.end());
+    }
+    return brokenFiles;
+}
+
+void doList() {
     logger l("doList()");
     int n;
     char buf[BUFSIZE];
-    dMap<string, quadBool> files;
+    map<string, fileParts> files;
     
-    for (int t = 0; t < 4; t++) {
-        if (serverStatus[t]) {
-            string msg = "dfc list";
-            send(sockets[t], msg.c_str(), msg.length(), 0);
-            
-            while (true) {
-                bzero(buf, BUFSIZE);
-                if ((n = recv(sockets[t], buf, BUFSIZE, 0)) <= 0) {
-                    l.log(error, "Connection with server timed out: DFS" + to_string(t + 1));
-                }
-                else {
-                    
-                }
-            }
-            
+    //get the broken files from each server and puts them in one list
+    vector<brokenFile> brokenFiles = getAllBrokenFiles();
+    
+    //figure out which files are complete and which are not
+    for (brokenFile f: brokenFiles) {
+        if (f.server < 0)
+            continue;
+        string name = f.name;
+        switch (f.part) {
+            case 1:
+                files[name].b1 = true;
+                break;
+            case 2:
+                files[name].b2 = true;
+                break;
+            case 3:
+                files[name].b3 = true;
+                break;
+            case 4:
+                files[name].b4 = true;
+                break;
+            default:
+                break;
         }
     }
+    
+    for (brokenFile f: brokenFiles)
+        l.log(debug, "Name: " + f.name + " Part: " + to_string(f.part) + " Server: " + to_string(f.server));
+    
+    l.log(dfc, "Files:");
+    //iterate through the map and print the files
+    for(map<string, fileParts>::iterator it = files.begin(); it != files.end(); it++) {
+        string output = it->first;
+        fileParts p = it->second;
+        //if and of the bools are false then the file is incomplete;
+        if (!p.b1 || !p.b2 || !p.b3 || !p.b4)
+            output += " [incomplete]";
+        l.log(dfc, output);
+    }
+    l.log(debug, "done");
+    
 }
 
 bool authenticate(int connfd) {
@@ -225,7 +315,7 @@ int main(int argc, char** argv) {
         
         vector<string> input = split(line, ' ');
         if (input[0] == "list") {
-            //todo
+            doList();
         }
         else if (input[0] == "put") {
             //todo

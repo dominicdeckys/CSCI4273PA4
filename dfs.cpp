@@ -16,7 +16,7 @@
 /*
  * Constants
  */
-short int num;
+short num;
 string dir;
 int listenfd;
 dMap<string, string> users;
@@ -67,14 +67,14 @@ void exitGracefully(int connfd) {
  */
 void printDir(string dirn) {
     DIR *dir;
-struct dirent *ent;
-if ((dir = opendir (dirn.c_str())) != NULL) {
-  /* print all the files and directories within directory */
-  while ((ent = readdir (dir)) != NULL) {
-    printf ("%s\n", ent->d_name);
-  }
-  closedir (dir);
-} else
+    struct dirent *ent;
+    if ((dir = opendir (dirn.c_str())) != NULL) {
+      /* print all the files and directories within directory */
+      while ((ent = readdir (dir)) != NULL) {
+        printf ("%s\n", ent->d_name);
+      }
+      closedir (dir);
+    } else
   /* could not open directory */
   perror ("");
 }
@@ -90,10 +90,11 @@ string getActualFileName(string name, short int part) {
  * @param user
  * @return 
  */
-dMap<string, short int> getUserFiles(string user_dir) {
+vector<brokenFile> getUserFiles(string user_dir) {
     logger l("getUserFiles()");
-    dMap<string, short int> sol;
-    return sol;
+    l.log(debug, "getting " + user_dir);
+    vector<brokenFile> sol;
+    
     
     //iterate through directory
     DIR *dir;
@@ -101,14 +102,16 @@ dMap<string, short int> getUserFiles(string user_dir) {
     if ((dir = opendir (user_dir.c_str())) != NULL) {
       /* print all the files and directories within directory */
       while ((ent = readdir (dir)) != NULL) {
+          l.log(debug, "pos1");
         //printf ("%s\n", ent->d_name);
           string fullname(ent->d_name);
+          l.log(debug, fullname);
           int len = fullname.length();
           
           //check if file name fits format we are expecting
           l.log(debug, fullname);
           if (fullname[0] == '.' && isdigit(fullname[len - 1]) && fullname[len - 2] == '.') {
-              sol.insert(fullname.substr(1, len - 3), fullname[len - 1] - '0');
+              sol.push_back( {fullname.substr(1, len - 3), (short)(fullname[len - 1] - '0'), num});
           }
           else
               l.log(debug, "file " + fullname + " does not match criteria");
@@ -121,17 +124,21 @@ dMap<string, short int> getUserFiles(string user_dir) {
     return sol;
 }
 
-bool doList(int connfd, map<string, short int> list) {
+bool doList(int connfd, vector<brokenFile> list) {
     int n;
+    char buf[BUFSIZE];
     logger l("doList()");
-    for (auto const&x : list) {
-        string msg = "dfs listitem " + x.first + " " + to_string(x.second);
+    for (brokenFile f : list) {
+        
+        string msg = "dfs listitem " + f.name + " " + to_string(f.part);
         l.log(debug, msg);
         n = send(connfd, msg.c_str(), msg.length(), 0);
         if (n <= 0) {
             l.log(warn, "Problem sending to client, closing socket connfd = " + to_string(connfd));
             exitGracefully(connfd);
         }
+        n = recv(connfd, buf, BUFSIZE, 0);
+        //todo verify that this is correct
     }
     string done = "dfs listdone";
     send(connfd, done.c_str(), done.length(), 0);
@@ -175,7 +182,7 @@ void * listenToClient (void * arg) {
         exitGracefully(connfd);
     }
     
-    dMap<string, short int> userFiles = getUserFiles(user_dir);
+    vector<brokenFile> userFiles = getUserFiles(user_dir);
     
     //loop to constantly listen to the client
     while (true) {
@@ -189,15 +196,16 @@ void * listenToClient (void * arg) {
         buf[n] = '\0'; //add end of string char in case it is not there
         //the abscence of the eos char causes many headaches
         string comm(buf);
-        vector<string> commList = split(command, ' ');
-        
+        l.log(debug, comm);
+        vector<string> commList = split(comm, ' ');
+        l.log(debug, stringVector(commList));
         if (commList.size() < 2 || commList[0] != "dfc") 
         {
-            l.log(warn, "client command formatted incorrectly, closing socket connfd = " + to_string(connfd));
+            l.log(warn, "client command formatted incorrectly 1, closing socket connfd = " + to_string(connfd));
             exitGracefully(connfd);
         }
         if(commList[1] == "list") {
-            doList(connfd, userFiles.getData());
+            doList(connfd, userFiles);
         }
         else if (commList[1] == "get") {
             
@@ -206,7 +214,7 @@ void * listenToClient (void * arg) {
             
         }
         else {
-            l.log(warn, "client command formatted incorrectly, closing socket connfd = " + to_string(connfd));
+            l.log(warn, "client command formatted incorrectly 2, closing socket connfd = " + to_string(connfd));
             exitGracefully(connfd);
         }
     }
@@ -218,6 +226,7 @@ void * listenToClient (void * arg) {
  * 
  */
 int main(int argc, char** argv) {
+    
     logger l("main()");
     //check arguments
     if (argc < 3) {

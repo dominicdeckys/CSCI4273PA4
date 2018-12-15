@@ -55,6 +55,11 @@ const static string authsuc = dfc_msg + " authsuccess";
 enum Severity {
     debug, info, warn, error, dfc, dfs
 };
+struct brokenFile {
+    string name;
+    short part = -1;
+    short server = -1;
+};
 
 template <class K, class V>
 class dMap {
@@ -62,6 +67,11 @@ private:
     map<K, V> m;
     
 public:
+    
+    struct tuple {
+        K key;
+        V value;
+    };
     
     int size() {
         return m.size();
