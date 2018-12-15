@@ -251,6 +251,19 @@ static void WriteAllBytes(char const* filename, vector<char> bytes) {
     ofs.close();
 }
 
+/**
+ * Sends partial file
+ * @param connfd
+ * @param name
+ * @param buf
+ * @param start
+ * @param end
+ */
+void sendPartialFile(int connfd, string name, char * buf, int start, int end) {
+    logger l("sendPartialFile()");
+    l.log(debug, "sending name " + name + " connfd " + to_string(connfd) + " start " + to_string(start) + " end " + to_string(end));
+    send(connfd, buf + start, end - start, 0);
+}
 /*
  * Splits a file into four nearly equal parts
  * returns a map where the int is the size of each part

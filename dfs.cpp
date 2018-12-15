@@ -124,6 +124,12 @@ vector<brokenFile> getUserFiles(string user_dir) {
     return sol;
 }
 
+/**
+ * Responds to the list command by sending a list of all the broken files
+ * @param connfd
+ * @param list
+ * @return 
+ */
 bool doList(int connfd, vector<brokenFile> list) {
     int n;
     char buf[BUFSIZE];
@@ -143,6 +149,10 @@ bool doList(int connfd, vector<brokenFile> list) {
     string done = "dfs listdone";
     send(connfd, done.c_str(), done.length(), 0);
     return true;
+}
+
+void doPut(int connfd, vector<brokenFile> list, string filename, short part) {
+    
 }
 
 void * listenToClient (void * arg) {
@@ -211,7 +221,8 @@ void * listenToClient (void * arg) {
             
         }
         else if (commList[1] == "put") {
-            
+            //todo - check there are enough args
+            doPut(connfd, userFiles, commList[2], commList[3]);
         }
         else {
             l.log(warn, "client command formatted incorrectly 2, closing socket connfd = " + to_string(connfd));

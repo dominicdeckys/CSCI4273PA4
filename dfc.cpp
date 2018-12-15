@@ -124,7 +124,11 @@ bool readConfiguration () {
     return true;
 }
 
-
+/**
+ * Requests a list of broken files from a single server
+ * @param server
+ * @return 
+ */
 vector<brokenFile> doListSingular(short server) {
     logger l("doListSingular()");
     int n;
@@ -142,6 +146,7 @@ vector<brokenFile> doListSingular(short server) {
         bzero(buf, BUFSIZE);
         if ((n = recv(sockets[server], buf, BUFSIZE, 0)) <= 0) {
             l.log(error, "Connection with server lost: DFS" + to_string(server + 1));
+            serverStatus[server] = false;
             //TODO remove function
             return files;
         }
@@ -174,6 +179,10 @@ vector<brokenFile> doListSingular(short server) {
     return files;
 }
 
+/**
+ * Requests the broken files from all of the servers
+ * @return 
+ */
 vector<brokenFile> getAllBrokenFiles() {
     vector<brokenFile> brokenFiles;
     for (int t = 0; t < 4; t++) {
@@ -183,6 +192,9 @@ vector<brokenFile> getAllBrokenFiles() {
     return brokenFiles;
 }
 
+/**
+ * Gets the broken files from all the server, determines which ones can be completed, and displays to the user.
+ */
 void doList() {
     logger l("doList()");
     int n;
@@ -230,6 +242,19 @@ void doList() {
     }
     l.log(debug, "done");
     
+}
+
+void doPutSingular(int connfd, string filename, short part, char * buf, int start, int end) {
+    logger l("doPutSingular");
+    int n;
+    l.log(debug, "sending name " + filename + " connfd " + to_string(connfd) + " start " + to_string(start) + " end " + to_string(end));
+    string msg = "dfc put " + filename + " " + to_string(part);
+    
+    send(connfd, msg.c_str(), msg.length(), 0);
+}
+
+void doPut(string filename) {
+    //todo
 }
 
 bool authenticate(int connfd) {
