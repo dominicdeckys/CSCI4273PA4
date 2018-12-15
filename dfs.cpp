@@ -17,6 +17,7 @@
  * Constants
  */
 short int num;
+string dir;
 int listenfd;
 dMap<string, string> users;
 
@@ -59,6 +60,84 @@ void exitGracefully(int connfd) {
     pthread_exit(NULL);
 }
 
+
+/**
+ * unused, for reference
+ * @param dirn
+ */
+void printDir(string dirn) {
+    DIR *dir;
+struct dirent *ent;
+if ((dir = opendir (dirn.c_str())) != NULL) {
+  /* print all the files and directories within directory */
+  while ((ent = readdir (dir)) != NULL) {
+    printf ("%s\n", ent->d_name);
+  }
+  closedir (dir);
+} else
+  /* could not open directory */
+  perror ("");
+}
+
+string getActualFileName(string name, short int part) {
+    return "." + name + "." + to_string(part);
+}
+
+/**
+ * Returns a map of all the user files and which part of the file it is
+ * DO NOT USE if the user directory does not exist, will throw error
+ * includes some code from here: https://stackoverflow.com/questions/612097/how-can-i-get-the-list-of-files-in-a-directory-using-c-or-c
+ * @param user
+ * @return 
+ */
+dMap<string, short int> getUserFiles(string user_dir) {
+    logger l("getUserFiles()");
+    dMap<string, short int> sol;
+    return sol;
+    
+    //iterate through directory
+    DIR *dir;
+    struct dirent *ent;
+    if ((dir = opendir (user_dir.c_str())) != NULL) {
+      /* print all the files and directories within directory */
+      while ((ent = readdir (dir)) != NULL) {
+        //printf ("%s\n", ent->d_name);
+          string fullname(ent->d_name);
+          int len = fullname.length();
+          
+          //check if file name fits format we are expecting
+          l.log(debug, fullname);
+          if (fullname[0] == '.' && isdigit(fullname[len - 1]) && fullname[len - 2] == '.') {
+              sol.insert(fullname.substr(1, len - 3), fullname[len - 1] - '0');
+          }
+          else
+              l.log(debug, "file " + fullname + " does not match criteria");
+      }
+      closedir (dir);
+    } else {
+        l.log(error, "Error opening directory " + user_dir);
+        return sol;
+    }
+    return sol;
+}
+
+bool doList(int connfd, map<string, short int> list) {
+    int n;
+    logger l("doList()");
+    for (auto const&x : list) {
+        string msg = "dfs listitem " + x.first + " " + to_string(x.second);
+        l.log(debug, msg);
+        n = send(connfd, msg.c_str(), msg.length(), 0);
+        if (n <= 0) {
+            l.log(warn, "Problem sending to client, closing socket connfd = " + to_string(connfd));
+            exitGracefully(connfd);
+        }
+    }
+    string done = "dfs listdone";
+    send(connfd, done.c_str(), done.length(), 0);
+    return true;
+}
+
 void * listenToClient (void * arg) {
     logger l("listenToClient()");
     int connfd = (int)*((int*)arg);
@@ -72,7 +151,7 @@ void * listenToClient (void * arg) {
         exitGracefully(connfd);
     }
     buf[n] = '\0'; //add end of string char in case it is not there
-    //the absense of the eos char causes many headaches
+    //the abscence of the eos char causes many headaches
     string command(buf);
     vector<string> com_list = split(command, ' ');
     
@@ -90,6 +169,48 @@ void * listenToClient (void * arg) {
     l.log(debug, "User authenticated " + user + " " + users.get(user));
     send(connfd, (const char *)authsuc.c_str(), authsuc.length(), 0);
     
+    string user_dir = dir + "/" + user;
+    if(!fileExists(user_dir) && !mkDirWrap(user_dir)) {
+        l.log(error, "Problem creating directory for the server, closing connfd = " + to_string(connfd));
+        exitGracefully(connfd);
+    }
+    
+    dMap<string, short int> userFiles = getUserFiles(user_dir);
+    
+    //loop to constantly listen to the client
+    while (true) {
+        bzero(buf, BUFSIZE);
+        n = recv(connfd, buf, BUFSIZE, 0);
+        if (n <= 0 || n >= BUFSIZE) {
+            l.log(warn, "Command from client formatted incorrectly, closing socket connfd = " + to_string(connfd));
+            exitGracefully(connfd);
+        }
+        
+        buf[n] = '\0'; //add end of string char in case it is not there
+        //the abscence of the eos char causes many headaches
+        string comm(buf);
+        vector<string> commList = split(command, ' ');
+        
+        if (commList.size() < 2 || commList[0] != "dfc") 
+        {
+            l.log(warn, "client command formatted incorrectly, closing socket connfd = " + to_string(connfd));
+            exitGracefully(connfd);
+        }
+        if(commList[1] == "list") {
+            doList(connfd, userFiles.getData());
+        }
+        else if (commList[1] == "get") {
+            
+        }
+        else if (commList[1] == "put") {
+            
+        }
+        else {
+            l.log(warn, "client command formatted incorrectly, closing socket connfd = " + to_string(connfd));
+            exitGracefully(connfd);
+        }
+    }
+    
     exitGracefully(connfd);
 }
 
@@ -98,13 +219,13 @@ void * listenToClient (void * arg) {
  */
 int main(int argc, char** argv) {
     logger l("main()");
-    
     //check arguments
     if (argc < 3) {
         l.log(dfs, "Usage: ./dfs <server #> <port>");
         return 0;
     }
     num = stoi(argv[1]);
+    dir = "DFS" + to_string(num);
     if (num < 1 || num > 4) {
         l.log(error, "Server number invalid");
         return 0;
@@ -113,10 +234,16 @@ int main(int argc, char** argv) {
     if(!readConfiguration()) {
         l.log(error, "Configuration file not set up correctly or does not exist.");
         return 0;
+    }    
+    if(!fileExists(dir) && !mkDirWrap(dir)) {
+        l.log(error, "Problem creating directory for the server");
+        return 0;
     }
     
     
-    //legacy code from PA3
+    /*
+     * Legacy code from PA3, not touching it because it works
+     */
     int connfd, openSockets;
     socklen_t clilen;
     struct sockaddr_in cliaddr, servaddr;

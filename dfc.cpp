@@ -21,7 +21,15 @@ int sockets[4];
 bool serverStatus[4];
 string user, pass;
 
+struct quadBool {
+    bool b1;
+    bool b2;
+    bool b3;
+    bool b4;
+};
+
 using namespace std;
+
 
 struct sockaddr_in buildAddressObject(string hostname, string port) {
     logger l("buildAddressObject()");
@@ -109,10 +117,28 @@ bool readConfiguration () {
     return true;
 }
 
-string doList() {
+dMap<string, quadBool> doList() {
+    logger l("doList()");
+    int n;
+    char buf[BUFSIZE];
+    dMap<string, quadBool> files;
     
     for (int t = 0; t < 4; t++) {
-        
+        if (serverStatus[t]) {
+            string msg = "dfc list";
+            send(sockets[t], msg.c_str(), msg.length(), 0);
+            
+            while (true) {
+                bzero(buf, BUFSIZE);
+                if ((n = recv(sockets[t], buf, BUFSIZE, 0)) <= 0) {
+                    l.log(error, "Connection with server timed out: DFS" + to_string(t + 1));
+                }
+                else {
+                    
+                }
+            }
+            
+        }
     }
 }
 
@@ -150,7 +176,6 @@ bool authenticate(int connfd) {
  * 
  */
 int main(int argc, char** argv) {
-   
     logger l("main()");
     if (!readConfiguration()) {
         l.log(error, "There was a problem reading your configuration file dfc.conf, "
@@ -176,7 +201,7 @@ int main(int argc, char** argv) {
             serverStatus[t] = true;
         }
         else {
-            l.log(dfc, "Authenticated failed for DFS" + to_string(t + 1));
+            l.log(dfc, "Authentication failed for DFS" + to_string(t + 1));
             downservers++;
             serverStatus[t] = false;
             close(sockets[t]);
@@ -200,7 +225,7 @@ int main(int argc, char** argv) {
         
         vector<string> input = split(line, ' ');
         if (input[0] == "list") {
-            
+            //todo
         }
         else if (input[0] == "put") {
             //todo

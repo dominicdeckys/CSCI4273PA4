@@ -39,8 +39,11 @@
 #include <ctime>
 #include <list>
 #include <vector>
+#include <experimental/filesystem>
+#include <dirent.h>
 
 using namespace std;
+namespace fs = std::experimental::filesystem;
 
 /*
  * Constants
@@ -64,6 +67,10 @@ public:
         return m.size();
     }
     
+    map<K, V> getData() {
+        return m;
+    }
+    
     /*
      * Inserts and updates if value already exists
      */
@@ -82,6 +89,7 @@ public:
     
     /*
      * Gets the value for the key, returns NULL if it does not exist
+     * Throws an exception if the map doesn't contain the key
      */
     V get(K key) {
         typename map<K, V>::iterator it = m.find(key);
@@ -92,6 +100,11 @@ public:
             return NULL;
     }
     
+    /**
+     * Returns true if the map contains
+     * @param k
+     * @return 
+     */
     bool contains(const K k) {
         typename map<K, V>::iterator it = m.find(k);
         if (it != m.end()) {
@@ -164,6 +177,20 @@ public:
 static bool fileExists (string name) {
     struct stat buf;
     return (stat (name.c_str(), &buf) == 0);
+}
+
+/**
+ * A wrapper for make directory which catches errors
+ * @param dir
+ */
+static bool mkDirWrap (string dir) {
+    try {
+        return mkdir(dir.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH) == 0;
+    }
+    catch (exception e) {
+        cout << e.what();
+        return false;
+    }
 }
 
 static string getMd5(string s) {
