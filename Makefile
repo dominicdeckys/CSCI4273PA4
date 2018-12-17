@@ -7,4 +7,4 @@ all : dfc.cpp dfs.cpp
 	##gcc server.cpp -o server -no-pie -pthread -lssl -lcrypto -g
 
 clean:
-	$(RM) *.o client server
+	$(RM) *.o dfs dfc
