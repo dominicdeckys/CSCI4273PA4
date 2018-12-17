@@ -377,6 +377,7 @@ bool doGet(string filename) {
     vector<char> completeFile;
     
     for (int t = 0; t < 4; t++) {
+        l.log(info, "Sending GET " + filename + " PART " = to_string(t+1) + " to DFS" + to_string(p[t]));
         vector<char> part = doGetSingular(p[t], filename, t + 1);
         completeFile.insert(completeFile.end(), part.begin(), part.end());
     }
@@ -401,8 +402,15 @@ bool doPut(string filename) {
     c = size / 2;
     b = c / 2;
     d = c + b;
-    int o[] = {0, 1, 2, 3};
-    doPutListInOrder(o, filename, filevec.data(), a, b, c, d, e);
+    string md55 = getMd5((const unsigned char *)filevec.data(), filevec.size());
+    //l.log(dfc, "MD5SUM of " + filename + " contents: " + md55);
+    
+    //finding %4 of the MD5SUM is the same as finding the %4 of the last char
+    short order = md55[15] % 4;
+    l.log(dfc, "MD5SUM of " + filename + " contents: " + md55 + " %4 = " + to_string(order));
+    
+    int o[][4] = {{0, 1, 2, 3}, {3, 0, 1, 2}, {2, 3, 0, 1}, {1, 2, 3, 0} };
+    doPutListInOrder(o[order], filename, filevec.data(), a, b, c, d, e);
 }
 
 bool authenticate(int connfd) {

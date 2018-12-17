@@ -203,8 +203,13 @@ static bool mkDirWrap (string dir) {
 }
 
 static string getMd5(const unsigned char * str, unsigned long len) {
+    unsigned char md5[MD5_DIGEST_LENGTH];
+    MD5(str, len, (unsigned char *)md5);
+    char finalString[33]; //I guess the size is 33
     
-    
+    for (int i = 0; i < 16; i++)
+        sprintf(&finalString[i*2], "%02x", (unsigned int)md5[i]);
+    return finalString;
 }
 
 static string getMd5(string s) {
